@@ -1,4 +1,4 @@
-# darkGPT
+# DarkSoulsGPT
 
 A character-level GPT trained on Dark Souls NPC dialogue, built from scratch in PyTorch.
 
