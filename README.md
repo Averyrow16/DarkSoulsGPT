@@ -6,7 +6,7 @@ A character-level GPT trained on Dark Souls NPC dialogue, built without high-lev
 
 ## Summary
 
-A transformer language model built from scratch while walking through Andrej Karpathy's makemore and GPT series. The goal was to understand every component of the architecture end-to-end rather than using a library that abstracts it away.
+A transformer language model built from scratch while walking through Andrej Karpathy's makemore and GPT series. The goal was to understand every component of the architecture end-to-end.
 
 The model is trained on NPC dialogue from Dark Souls and generates new text in the same style.
 
