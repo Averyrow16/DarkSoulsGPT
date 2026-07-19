@@ -1,6 +1,9 @@
 import torch # we use PyTorch: https://pytorch.org
 import torch.nn as nn
 from torch.nn import functional as F
+import gradio as gr
+
+
 # hyperparameters:
 batch_size = 64 # individual sequences being processed in parallel
 block_size = 256 # maximum context length for predictions
@@ -193,8 +196,10 @@ class BigramLanguageModel(nn.Module):
         #print(f"loss2: {loss2}")
         return logits, loss
     
-    def generate(self, idx, max_new_tokens):
+    def generate(self, idx, max_new_tokens, temperature=1.0, top_k=None):
         #idx is (B, T) array of indices in current context
+        
+        
         for i in range(max_new_tokens):
             idx_cond = idx[:, -block_size:] #cropped to not go out of range
             # get predictions
@@ -202,7 +207,10 @@ class BigramLanguageModel(nn.Module):
             # focuses on last time step
             logits = logits[:, -1, :] # becomes (B, C)
             # get probabilities
-            probs = F.softmax(logits, dim=-1) # (B, C)
+            if top_k is not None:
+                v, _ = torch.topk(logits, top_k)
+                logits[logits < v[:, [-1]]] = float('-inf')
+            probs = F.softmax(logits / temperature, dim=-1) #(B, C)
             # sample from distribution            
             idx_next = torch.multinomial(probs, num_samples=1) # (B, 1)
             # append sampled index to running sequence
@@ -243,4 +251,31 @@ for iter in range(max_iters):
 m.load_state_dict(torch.load('best_model.pt'))
 m.eval()
 
-print(decode(m.generate(idx, max_new_tokens=500)[0].tolist())) #generates 100 tokens after idx
+
+print("Default Output: ")
+print(decode(m.generate(idx, max_new_tokens=500, temperature=1.0, top_k=None)[0].tolist())) #generates 500 tokens after idx
+print()
+print("High Temperature Output: ")
+print(decode(m.generate(idx, max_new_tokens=500, temperature=2.0, top_k=None)[0].tolist())) #generates 500 tokens after idx
+print()
+print("Low Temperature Output: ")
+print(decode(m.generate(idx, max_new_tokens=500, temperature=0.5, top_k=None)[0].tolist())) #generates 500 tokens after idx
+print()
+print("Top K Output: ")
+print(decode(m.generate(idx, max_new_tokens=500, temperature=1.0, top_k=20)[0].tolist())) #generates 500 tokens after idx
+
+
+def generate_text(prompt, temperature, max_tokens):
+    context = torch.tensor([encode(prompt)], dtype=torch.long, device=device)
+    return decode(m.generate(context, int(max_tokens), temperature=temperature)[0].tolist())
+
+gr.Interface(
+    fn=generate_text,
+    inputs=[
+        gr.Textbox(label="Prompt"),
+        gr.Slider(0.1, 2.0, value=1.0, label="Temperature"),
+        gr.Slider(50, 500, value=200, step=1, label="Max Tokens")
+    ],
+    outputs=gr.Textbox(label="Generated Text"),
+    title="DarkSoulsGPT"
+).launch()
