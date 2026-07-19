@@ -78,7 +78,7 @@ Applied before each sub-layer (pre-normalization). Normalizes activations across
 ## Dataset
 
 - **Source:** Dark Souls NPC dialogue
-- **Size:** ~61,500 words
+- **Size:** 61,511 words, 324,122 characters
 - **Vocabulary:** 67 unique characters
 - **Split:** 90% train / 10% validation
 
