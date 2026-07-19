@@ -4,7 +4,7 @@ from torch.nn import functional as F
 # hyperparameters:
 batch_size = 64 # individual sequences being processed in parallel
 block_size = 256 # maximum context length for predictions
-max_iters = 3000
+max_iters = 1500
 eval_interval = 300
 learning_rate = 1e-3
 eval_iters = 200
@@ -14,6 +14,8 @@ n_layer = 6
 dropout = 0.2
 device = 'cuda'
 
+print(torch.cuda.is_available())
+print(torch.cuda.get_device_name(0) if torch.cuda.is_available() else "No GPU available")
 
 with open('allDialogue.txt', 'r', encoding='utf-8') as file:
     text = file.read()
@@ -217,12 +219,18 @@ print(decode(m.generate(idx, max_new_tokens=100)[0].tolist())) #generates 100 to
 optimizer = torch.optim.AdamW(m.parameters(), lr=learning_rate)
 
 batch_size = 32
+best_val_loss  = 5.0
+"""
 for iter in range(max_iters):
     # every once in a while evaluate the loss on train and val sets
     if iter % eval_interval == 0 or iter == max_iters - 1:
         losses = estimate_loss()
         print(f"step {iter}: train loss {losses['train']:.4f}, val loss {losses['val']:.4f}")
     
+        if losses['val'] < best_val_loss:
+            best_val_loss = losses['val']
+            torch.save(m.state_dict(), 'best_model.pt') 
+            
     # sample a batch of data
     xb, yb = get_batch('train')
     
@@ -231,6 +239,8 @@ for iter in range(max_iters):
     optimizer.zero_grad(set_to_none=True)
     loss.backward()
     optimizer.step() 
+"""
+m.load_state_dict(torch.load('best_model.pt'))
+m.eval()
 
-    
 print(decode(m.generate(idx, max_new_tokens=500)[0].tolist())) #generates 100 tokens after idx
