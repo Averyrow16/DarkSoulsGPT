@@ -44,7 +44,7 @@ The model follows the GPT architecture from Attention Is All You Need (Vaswani e
 
 ### Key components
 
-**Self-Attention Head*
+**Self-Attention Head**
 Each head computes queries, keys, and values from the input. The attention scores
 `q @ k.T / sqrt(head_size)` determine how much each token attends to every previous token. The torch.tril mask ensures tokens never see future tokens during training.
 
@@ -82,6 +82,27 @@ Applied before each sub-layer (pre-normalization). Normalizes activations across
 - **Vocabulary:** 67 unique characters
 - **Split:** 90% train / 10% validation
 
+---
+
+## Output From My Best Loss (1.48)
+```
+Sorcery... You are welcome... Oh, the way... They cursed.
+Keh heh...
+Keh heh heh...It's taken to be it.
+Now the twicenail is sad?
+Keh heh heh...
+Oh, you again? Damn.
+We're this fool...
+My bloody are except, master...
+Spurized these days...
+Daty business of sun...human...
+Yah, young Undead With the curse purchase to remeld the work upon you...
+Oh you again?
+Very well. Just call take you give up yourself to this.
+Quelaag? It is your sword.
+Don't you seek to this for me.
+Well, you desired to the Ca
+```
 ---
 
 ## References
