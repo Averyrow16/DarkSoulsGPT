@@ -6,15 +6,15 @@ A character-level GPT trained on Dark Souls NPC dialogue, built without high-lev
 
 ## Summary
 
-A transformer language model built from scratch while walking through Andrej Karpathy's makemore and GPT series. The goal was to understand every component of the architecture end-to-end.
+A transformer language model built from scratch while walking through Andrej Karpathy's makemore and GPT series. My goal was to understand every component of the architecture end-to-end.
 
-The model is trained on NPC dialogue from Dark Souls and generates new text in the same style.
+Trained to generate text that sounds like NPC dialogue from Dark Souls.
 
 ---
 
 ## Architecture
 
-The model follows the GPT architecture from Attention Is All You Need (Vaswani et al., 2017), scaled down to run on a single GPU.
+The model follows the GPT architecture from the research paper Attention Is All You Need (Vaswani et al., 2017), but scaled down to run on a single GPU.
 
     Input tokens
         |
@@ -78,7 +78,7 @@ Applied before each sub-layer (pre-normalization). Normalizes activations across
 ## Dataset
 
 - **Source:** Dark Souls NPC dialogue
-- **Size:** ~61,500 words, character-level tokenization
+- **Size:** ~61,500 words
 - **Vocabulary:** 67 unique characters
 - **Split:** 90% train / 10% validation
 
