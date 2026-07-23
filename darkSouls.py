@@ -15,12 +15,15 @@ dropout = 0.2
 device = 'cuda'
 
 
+
+
 with open('allDialogue.txt', 'r', encoding='utf-8') as file:
     text = file.read()
 
 #unique characters
 chars = sorted(list(set(text)))
 vocab_size = len(chars)
+
 # create a mapping from characters to integers
 stoi = {}
 itos = {}
@@ -28,6 +31,7 @@ for i, ch in enumerate(chars):
     stoi[ch] = i
     itos[i] = ch
     
+#tokenizer functions
 encode = lambda s: [stoi[c] for c in s]
 decode = lambda l: ''.join([itos[i] for i in l])
 
@@ -41,15 +45,17 @@ data_test = data[split:]
 
 
 
-"""
-generate a small random batch of data of inputs x and targets y
-"""
+
 def get_batch(split):
+    """
+    generate a small random batch of data of inputs x and targets y
+    """
     data = data_train if split == 'train' else data_test
     ix = torch.randint(len(data) - block_size, (batch_size,))
-    x = torch.stack([data[i:i+block_size] for i in ix])
-    y = torch.stack([data[i+1:i+block_size+1] for i in ix])
-    x, y = x.to(device), y.to(device)
+    x = torch.stack([data[i:i+block_size] for i in ix]) #stacks tensors of the same shape along a new dimension
+    #in this case the tensors are from our data (tensor of the text)
+    y = torch.stack([data[i+1:i+block_size+1] for i in ix]) #shifted right by 1 (we're trying to predict the NEXT token)
+    x, y = x.to(device), y.to(device) #moves from cpu memory to device/intended memory
     return x, y
 
 
@@ -57,18 +63,19 @@ xb, yb = get_batch('train')
 #print(xb.shape)  # should be (batch_size, block_size)
 #print(yb.shape)  # should be (batch_size, block_size)
 
-@torch.no_grad()
+@torch.no_grad() #means we wont calculate gradients to save memory
 def estimate_loss():
+    """averages loss for train and val"""
     out = {}
-    m.eval()
+    m.eval() #evaluation mode (turns off training dropout)
     for split in ['train', 'val']:
-        losses = torch.zeros(eval_iters)
+        losses = torch.zeros(eval_iters) #storing all losses 
         for k in range(eval_iters):
             X, Y = get_batch(split)
             logits, loss = m(X, Y)
             losses[k] = loss.item()
-        out[split] = losses.mean()
-    m.train()
+        out[split] = losses.mean() #gets the mean/average
+    m.train() #back to training mode
     return out
 
 
@@ -80,23 +87,35 @@ class Head(nn.Module):
     
     def __init__(self, head_size):
         super().__init__()
-        self.key = nn.Linear(n_embd, head_size, bias=False)
-        self.query = nn.Linear(n_embd, head_size, bias=False)
-        self.value = nn.Linear(n_embd, head_size, bias=False)
-        self.register_buffer('tril', torch.tril(torch.ones(block_size, block_size))) #different from a parameter (persistent buffer)
-        #register_buffer essentially is part of the model but is not learned
+        self.key = nn.Linear(n_embd, head_size, bias=False) # key: what kind of info the token contains (makes it searchable)
+        self.query = nn.Linear(n_embd, head_size, bias=False) #query: what is the token looking for from the rest of the text
+        self.value = nn.Linear(n_embd, head_size, bias=False) #value: the actual content, passed along if the key matches a query
+        self.register_buffer('tril', torch.tril(torch.ones(block_size, block_size))) #persistent buffer
+        # register_buffer essentially is part of the model but is not learned
         # in this case 'tril' is the lower-triangular matrix mask used to prevent tokens from seeing the future
         self.dropout = nn.Dropout(dropout) # helps stop overfitting
+        #sets some neurons to 0 in each training step, meaning the model ant rely on any single neuron so it wont just memorize the training set
 
-    def forward(self, x):
+    def forward(self, x): #called automatically when you do head(x) or something similar
+        """
+        Tokens produce query and key. We will compute their scores with q @ k.T (comparing all queries againt all keys
+        Softmax makes scores into probabilities.
+        Tokens with high key-query similarity (high weight) contribute more to the output bc we take a weighted sum of the values 
+        """
+       
         B,T,C = x.shape
         k = self.key(x) # (B, T, C)
         q = self.query(x) # (B, T, C) 
         # compute attention scores ("affinities")
         # normalizing it
         wei = q @ k.transpose(-2,-1) * C**-0.5 # (B, T, C) @ (B, C, T) = (B, T, T)
+        # scaled by C**-0.5 (sqrt of head_size) to prevent large dot products
+        # and to keep values at reasonable levels so softmax isn't pushed into flat regions that would have gradients near 0
+        
         # decoder block
         wei = wei.masked_fill(self.tril[:T, :T] ==0, float('-inf')) # (B, T, T)
+        #this is the causal mask, which forces tokens to only attend to themselves or previous tokens, never future ones
+        
         # softmax
         wei = F.softmax(wei, dim=-1) # (B, T, T)
         # perform the weighted aggregation of the values
@@ -104,24 +123,35 @@ class Head(nn.Module):
         
         v = self.value(x) # (B, T, C)
         out = wei @ v # (B, T, T) @ (B, T, C) = (B, T, C)
+        # weighted sum of the values
+        # basically token's value vector is multiplied by its attention score and then the products are added together to make the output
         return out
         
         
 class MultiHeadAttention(nn.Module):
-    """heads of self-attention in parallel"""       
+    """
+    Communication: heads of self-attention in parallel
+    Tokens talk to each other through heads and gather info from other tokens
+    """       
     def __init__(self, num_heads, head_size):
         super().__init__()
         self.heads = nn.ModuleList((Head(head_size) for _ in range(num_heads))) #list of heads
-        self.proj = nn.Linear(n_embd, n_embd) # linear transformation
+        #heads are registered as submodules so they show up in m.parameters and are considered part of the model
+        self.proj = nn.Linear(n_embd, n_embd)  # projects concatenated head outputs back into residual pathway
         self.dropout = nn.Dropout(dropout) #regularization, randomly zeroes out some elements so that we dont focus too hard on specific neurons
-    
+        # regularization is a technique to prevent overfitting by adding a penalty term to the loss function :)
+
     def forward(self, x):
         out = torch.cat([h(x) for h in self.heads], dim=-1) # concatenates all outputs over channel dimension
-        out = self.dropout(self.proj(out)) 
-        return out
+        out = self.dropout(self.proj(out))  #linear transformation and regularization
+        return out #output of communication
 
 class FeedForward(nn.Module):
-    """a simple linear layer followed by a non-linearity"""
+    """
+        Each token independently processes what it gathered from attention (computation)
+        4 layers: Linear -> ReLU -> Linear -> Dropout
+        The hidden layer expands to 4x n_embd before projecting back. Higher space gives model more room for computation
+        """
     
     def __init__(self, n_embd):
         super().__init__()
@@ -145,41 +175,55 @@ class Block(nn.Module):
         head_size = n_embd // n_head
         self.sa = MultiHeadAttention(n_head, head_size) # communication
         self.ffwd = FeedForward(n_embd) # computation
+        
         self.ln1 = nn.LayerNorm(n_embd) #normalizes features
         self.ln2 = nn.LayerNorm(n_embd) # needs 2 because the learned parameters in each case are trying to fit different needs
+        #rescales each token vector to have mean of 0 and variance of 1
+
     def forward(self, x): # done by tokens independently 
         x = x + self.sa(self.ln1(x)) # fork off, do communication and come back
         x = x + self.ffwd(self.ln2(x)) # fork off, do computation and come back
         return x
 
-class BigramLanguageModel(nn.Module):
-    
+class GPT(nn.Module):
+    """
+    Character-level GPT model.
+    Token and position embeddings are added and passed through n_layer transformer blocks.
+    Each block does: attention (tokens communicate) then feedforward (tokens compute independently)
+    Final LayerNorm + linear head converts to logits over the vocabulary to get vocab scores.
+    """
+
     def __init__(self, vocab_size):
         super().__init__() # runs nn.Module's init method to set up data structures
         # tokens read of logits for next token from the lookup table
-        self.token_embedding_table = nn.Embedding(vocab_size, n_embd)
-        self.position_embedding_table = nn.Embedding(block_size, n_embd)
-        self.blocks = nn.Sequential(*[Block(n_embd, n_head=n_head) for _ in range(n_layer)])
+        self.token_embedding_table = nn.Embedding(vocab_size, n_embd) #maps tokens to learned vectors (rep. what characters "mean") of size n_embd
+        self.position_embedding_table = nn.Embedding(block_size, n_embd) # maps positions (0 to block_size-1) to learned vectors of size n_embd (gives model info on where each token is in the sequence)
+        
+        self.blocks = nn.Sequential(*[Block(n_embd, n_head=n_head) for _ in range(n_layer)]) # stacks n_layer transformer blocks in sequence
+        #self.blocks(x) runs through all 6 automatically
         self.ln_f = nn.LayerNorm(n_embd) # final layer norm
-        self.lm_head = nn.Linear(n_embd, vocab_size) #language modeling head
+        self.lm_head = nn.Linear(n_embd, vocab_size) #language modeling head. COnverts to vocab scores
+        #lm_head projects from n_embd to vocab_size (384->67). 
         
     def forward(self, idx, targets=None):
-        
-        B, T = idx.shape
         #idx and target are tensor of integers
-        tok_emb = self.token_embedding_table(idx) # (B, T, C)
-        pos_emb = self.position_embedding_table(torch.arange(T, device=idx.device))
-        x = tok_emb + pos_emb # (B, T, C)
-        x = self.blocks(x) # (B, T, C)
-        x = self.ln_f(x)
-        logits = self.lm_head(x)  # (B, T, vocab_size)
+
+        B, T = idx.shape # B = batch size, T = sequence length (number of tokens in context)
+        tok_emb = self.token_embedding_table(idx) # (B, T, C), rep. what each token is 
+        pos_emb = self.position_embedding_table(torch.arange(T, device=idx.device)) # (T, C) where each token is
+        x = tok_emb + pos_emb # (B, T, C) combining identity + pos.
+
+        x = self.blocks(x) # (B, T, C) attention + feedforward x n_layer
+        x = self.ln_f(x) # final layernorm before proj. to vocab
+
+        logits = self.lm_head(x)  # (B, T, vocab_size) scores for possible next token (vocab scores)
         
         if targets is None:
-            loss = None
+            loss = None # means we're in generation mode so no targets just return logits
         else:
             B, T, C = logits.shape # B*T is N, C is vocab size
-            logits = logits.view(B*T, C)              # now (N, vocab_size), N = B*T
-            targets = targets.view(B*T)               # now (N,)
+            logits = logits.view(B*T, C)   # reshape to (N, vocab_size) for cross_entropy
+            targets = targets.view(B*T)    # reshape to (N,) bc cross_entropy expects 1D targets
             loss = F.cross_entropy(logits, targets)
             """
             counts = logits.exp()
@@ -207,7 +251,7 @@ class BigramLanguageModel(nn.Module):
             idx = torch.cat((idx, idx_next), dim=1) # (B, T+1)
         return idx
 
-m = BigramLanguageModel(vocab_size).to(device)
+m = GPT(vocab_size).to(device)
 logits, loss = m(xb, yb)
 #print(logits.shape)
 #print(loss)
