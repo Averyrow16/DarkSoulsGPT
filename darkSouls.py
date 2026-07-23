@@ -1,10 +1,13 @@
 import torch # we use PyTorch: https://pytorch.org
 import torch.nn as nn
 from torch.nn import functional as F
+import gradio as gr
+
+
 # hyperparameters:
 batch_size = 64 # individual sequences being processed in parallel
 block_size = 256 # maximum context length for predictions
-max_iters = 3000
+max_iters = 1500
 eval_interval = 300
 learning_rate = 1e-3
 eval_iters = 200
@@ -14,6 +17,8 @@ n_layer = 6
 dropout = 0.2
 device = 'cuda'
 
+print(torch.cuda.is_available())
+print(torch.cuda.get_device_name(0) if torch.cuda.is_available() else "No GPU available")
 
 
 
@@ -235,8 +240,10 @@ class GPT(nn.Module):
         #print(f"loss2: {loss2}")
         return logits, loss
     
-    def generate(self, idx, max_new_tokens):
+    def generate(self, idx, max_new_tokens, temperature=1.0, top_k=None):
         #idx is (B, T) array of indices in current context
+        
+        
         for i in range(max_new_tokens):
             idx_cond = idx[:, -block_size:] #cropped to not go out of range
             # get predictions
@@ -244,7 +251,10 @@ class GPT(nn.Module):
             # focuses on last time step
             logits = logits[:, -1, :] # becomes (B, C)
             # get probabilities
-            probs = F.softmax(logits, dim=-1) # (B, C)
+            if top_k is not None:
+                v, _ = torch.topk(logits, top_k)
+                logits[logits < v[:, [-1]]] = float('-inf')
+            probs = F.softmax(logits / temperature, dim=-1) #(B, C)
             # sample from distribution            
             idx_next = torch.multinomial(probs, num_samples=1) # (B, 1)
             # append sampled index to running sequence
@@ -261,12 +271,18 @@ print(decode(m.generate(idx, max_new_tokens=100)[0].tolist())) #generates 100 to
 optimizer = torch.optim.AdamW(m.parameters(), lr=learning_rate)
 
 batch_size = 32
+best_val_loss  = 5.0
+"""
 for iter in range(max_iters):
     # every once in a while evaluate the loss on train and val sets
     if iter % eval_interval == 0 or iter == max_iters - 1:
         losses = estimate_loss()
         print(f"step {iter}: train loss {losses['train']:.4f}, val loss {losses['val']:.4f}")
     
+        if losses['val'] < best_val_loss:
+            best_val_loss = losses['val']
+            torch.save(m.state_dict(), 'best_model.pt') 
+            
     # sample a batch of data
     xb, yb = get_batch('train')
     
@@ -275,6 +291,35 @@ for iter in range(max_iters):
     optimizer.zero_grad(set_to_none=True)
     loss.backward()
     optimizer.step() 
+"""
+m.load_state_dict(torch.load('best_model.pt'))
+m.eval()
 
-    
-print(decode(m.generate(idx, max_new_tokens=500)[0].tolist())) #generates 100 tokens after idx
+
+print("Default Output: ")
+print(decode(m.generate(idx, max_new_tokens=500, temperature=1.0, top_k=None)[0].tolist())) #generates 500 tokens after idx
+print()
+print("High Temperature Output: ")
+print(decode(m.generate(idx, max_new_tokens=500, temperature=2.0, top_k=None)[0].tolist())) #generates 500 tokens after idx
+print()
+print("Low Temperature Output: ")
+print(decode(m.generate(idx, max_new_tokens=500, temperature=0.5, top_k=None)[0].tolist())) #generates 500 tokens after idx
+print()
+print("Top K Output: ")
+print(decode(m.generate(idx, max_new_tokens=500, temperature=1.0, top_k=20)[0].tolist())) #generates 500 tokens after idx
+
+
+def generate_text(prompt, temperature, max_tokens):
+    context = torch.tensor([encode(prompt)], dtype=torch.long, device=device)
+    return decode(m.generate(context, int(max_tokens), temperature=temperature)[0].tolist())
+
+gr.Interface(
+    fn=generate_text,
+    inputs=[
+        gr.Textbox(label="Prompt"),
+        gr.Slider(0.1, 2.0, value=1.0, label="Temperature"),
+        gr.Slider(50, 500, value=200, step=1, label="Max Tokens")
+    ],
+    outputs=gr.Textbox(label="Generated Text"),
+    title="DarkSoulsGPT"
+).launch()
