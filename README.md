@@ -84,6 +84,11 @@ Applied before each sub-layer (pre-normalization). Normalizes activations across
 
 ---
 
+## Requirements
+The requirements.txt file contains all required installations. After cloning the repo, simply run this command: `pip install -r requirements.txt`
+
+---
+
 ## Output From My Best Loss (1.48)
 ```
 Sorcery... You are welcome... Oh, the way... They cursed.
