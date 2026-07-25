@@ -46,7 +46,7 @@ The model follows the GPT architecture from the research paper Attention Is All 
 
 **Self-Attention Head**
 Each head computes queries, keys, and values from the input. The attention scores
-`q @ k.T / sqrt(head_size)` determine how much each token attends to every previous token. The torch.tril mask ensures tokens never see future tokens during training.
+`q @ k.T / sqrt(head_size)` determine how much each token attends to every previous token. The `torch.tril` mask ensures tokens never see future tokens during training.
 
 **Multi-Head Attention**
 Six attention heads run in parallel, each learning different patterns. Their outputs are concatenated and projected back to n_embd.
@@ -84,8 +84,17 @@ Applied before each sub-layer (pre-normalization). Normalizes activations across
 
 ---
 
-## Requirements
-The requirements.txt file contains all required installations. After cloning the repo, simply run this command: `pip install -r requirements.txt`
+## Usage
+
+Install dependencies:
+```bash
+pip install -r requirements.txt
+```
+
+Train the model:
+```bash
+python darkSouls.py
+```
 
 ---
 
