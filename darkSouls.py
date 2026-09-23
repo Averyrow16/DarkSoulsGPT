@@ -9,12 +9,12 @@ batch_size = 64 # individual sequences being processed in parallel
 block_size = 256 # maximum context length for predictions
 max_iters = 1500
 eval_interval = 300
-learning_rate = 1e-3
+learning_rate = 1e-3 #controls how aggresively the optimizer changes the parameters
 eval_iters = 200
-n_embd = 384
-n_head = 6
-n_layer = 6
-dropout = 0.2
+n_embd = 384 #number of embedding dimensions. Higher means it can learn more complex patterns but requires more memory
+n_head = 6 #number of self attention heads. Give breadth in a single layer by letting different heads look at different patterns
+n_layer = 6 #number of layers. Gives depth in the network by letting the network reason deeper over more sequential steps
+dropout = 0.2 #20% of activations will be randomly removed
 device = 'cuda'
 
 print(torch.cuda.is_available())
