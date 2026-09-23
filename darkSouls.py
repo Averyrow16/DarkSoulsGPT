@@ -1,4 +1,4 @@
-import torch # we use PyTorch: https://pytorch.org
+import torch 
 import torch.nn as nn
 from torch.nn import functional as F
 import gradio as gr
