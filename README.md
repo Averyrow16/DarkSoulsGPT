@@ -14,7 +14,7 @@ Trained to generate text that sounds like NPC dialogue from Dark Souls.
 
 ## Architecture
 
-The model follows the GPT architecture from the research paper Attention Is All You Need (Vaswani et al., 2017), but scaled down to run on a single GPU.
+The model is a simple decoder-style Transformer based on the architecture introduced in Attention Is All You Need (Vaswani et al., 2017), implemented from scratch in PyTorch.
 
     Input tokens
         |
@@ -45,20 +45,25 @@ The model follows the GPT architecture from the research paper Attention Is All 
 ### Key components
 
 **Self-Attention Head**
-Each head computes queries, keys, and values from the input. The attention scores
-`q @ k.T / sqrt(head_size)` determine how much each token attends to every previous token. The torch.tril mask ensures tokens never see future tokens during training.
+Each head computes queries, keys, and values from the input. The attention scores `q @ k.T / sqrt(head_size)` determine how much each token attends to every previous token (higher score = more relevant). `q @ k.T` is scoring every query against every key, which allows us to find the most relevant values. `sqrt(head_size` is a scaling factor. The torch.tril mask ensures tokens never see future tokens during training.
+
+**Softmax**
+Normalizes scores to add up to 1, representing the relative amount of attention placed on each position
 
 **Multi-Head Attention**
-Six attention heads run in parallel, each learning different patterns. Their outputs are concatenated and projected back to n_embd.
+Six attention heads run in parallel, each learning different patterns. Their outputs are concatenated and projected back to n_embd. 
 
 **Feed-Forward Network**
-After attention (the communication between tokens), each token passes independently through a small MLP (computation on what was communicated). The hidden layer expands to 4 x n_embd before projecting back.
+After attention (the communication between tokens), each token passes independently through a small MLP (computation on what was communicated). The hidden layer expands to 4 x n_embd so the network has more capacity to perform nonlinear transformations before projecting back. While its expanded it goes through ReLU which adds non-linearity to the network, allowing it to learn complex patterns.
 
 **Residual Connections**
-Each sub-layer adds its input back to its output: `x = x + sublayer(x)`. This gives gradients a direct path back through the network, which helps to avoid vanishing gradients or info loss when training 6+ layers.
+Each sub-layer adds its input back to its output: `x = x + sublayer(x)`. This gives gradients a direct path back through the network, which helps to avoid vanishing gradients or info loss when training 6+ layers. We have 2 residual updates in our model.
 
 **LayerNorm**
-Applied before each sub-layer (pre-normalization). Normalizes activations across the embedding dimension, which stabilizes training significantly.
+Applied before each sub-layer (pre-normalization). Normalizes activations (outputs of neurons/layers after a mathematical operation has been applied to input) across the embedding dimension, which stabilizes training significantly.
+
+
+
 
 ### Hyperparameters
 

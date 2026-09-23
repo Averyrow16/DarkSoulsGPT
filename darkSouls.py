@@ -70,7 +70,7 @@ def estimate_loss():
         losses = torch.zeros(eval_iters)
         for k in range(eval_iters):
             X, Y = get_batch(split)
-            logits, loss = m(X, Y)
+            logits, loss = m(X, Y) # logits are raw, unnormalized predictions the model assigns to tokens in the vocab as a candidate for the next word
             losses[k] = loss.item()
         out[split] = losses.mean()
     m.train()
@@ -85,9 +85,15 @@ class Head(nn.Module):
     
     def __init__(self, head_size):
         super().__init__()
-        self.key = nn.Linear(n_embd, head_size, bias=False)
-        self.query = nn.Linear(n_embd, head_size, bias=False)
-        self.value = nn.Linear(n_embd, head_size, bias=False)
+        
+        
+        """these 3 layers are linear projections
+        they are matrices that transform raw word embeddings (n_embd)
+        into the specific head_size space where the attention math takes place"""
+        self.key = nn.Linear(n_embd, head_size, bias=False) #ID tag for word
+        self.query = nn.Linear(n_embd, head_size, bias=False) #what the word is looking for
+        self.value = nn.Linear(n_embd, head_size, bias=False) #value the word carries
+        
         self.register_buffer('tril', torch.tril(torch.ones(block_size, block_size))) #different from a parameter (persistent buffer)
         #register_buffer essentially is part of the model but is not learned
         # in this case 'tril' is the lower-triangular matrix mask used to prevent tokens from seeing the future
@@ -150,7 +156,8 @@ class Block(nn.Module):
         head_size = n_embd // n_head
         self.sa = MultiHeadAttention(n_head, head_size) # communication
         self.ffwd = FeedForward(n_embd) # computation
-        self.ln1 = nn.LayerNorm(n_embd) #normalizes features
+        self.ln1 = nn.LayerNorm(n_embd) #normalizes features to keep activations in a manageable range (helps optimization)
+        # activations are outputs of neurons/layers after a mathematical operation has been applied to input
         self.ln2 = nn.LayerNorm(n_embd) # needs 2 because the learned parameters in each case are trying to fit different needs
     def forward(self, x): # done by tokens independently 
         x = x + self.sa(self.ln1(x)) # fork off, do communication and come back
@@ -255,13 +262,13 @@ m.eval()
 print("Default Output: ")
 print(decode(m.generate(idx, max_new_tokens=500, temperature=1.0, top_k=None)[0].tolist())) #generates 500 tokens after idx
 print()
-print("High Temperature Output: ")
+print("High Temperature Output: ") # high temperature means it is less likely to pick only safe words (more variety but more likely to be nonsense)
 print(decode(m.generate(idx, max_new_tokens=500, temperature=2.0, top_k=None)[0].tolist())) #generates 500 tokens after idx
 print()
-print("Low Temperature Output: ")
+print("Low Temperature Output: ") # low temperature means it picks the safest most likely words (more repetitive but more likely to be correct)
 print(decode(m.generate(idx, max_new_tokens=500, temperature=0.5, top_k=None)[0].tolist())) #generates 500 tokens after idx
 print()
-print("Top K Output: ")
+print("Top K Output: ") #Top-K means it will choose the top K most likely words
 print(decode(m.generate(idx, max_new_tokens=500, temperature=1.0, top_k=20)[0].tolist())) #generates 500 tokens after idx
 
 
