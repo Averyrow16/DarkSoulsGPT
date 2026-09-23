@@ -89,6 +89,20 @@ Applied before each sub-layer (pre-normalization). Normalizes activations (outpu
 
 ---
 
+## Usage
+
+Install dependencies:
+```bash
+pip install -r requirements.txt
+```
+
+Train the model:
+```bash
+python darkSouls.py
+```
+
+---
+
 ## Output From My Best Loss (1.48)
 ```
 Sorcery... You are welcome... Oh, the way... They cursed.
